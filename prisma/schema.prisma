@@ -1,0 +1,174 @@
+// Metaltec Stock Control System Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Authentication
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      UserRole @default(OPERATOR)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements Movement[]
+  overflowActions OverflowAction[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  OPERATOR  // Warehouse operator - full access to receive/store/move
+  MANAGER   // Anderson - dashboard, reports, mark as "OK"
+  EXPEDITION // Karen - view stock, register withdrawals
+  PRODUCTION // Adriano/Bastião - view status only
+}
+
+// Products Database
+model Product {
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g., "1122 BR", "1510X CR"
+  name        String   // Full product name
+  color       String   // BR (White), PT (Black), CR (Chrome), MA (Brown), ME (Metallic), BZ (Bronze)
+  colorSuffix String   // Extracted suffix for easier filtering
+  material    String?  // X (Aluminum), XZ (Zamak), XJ, XJZ, G, M
+  floor       Int      // 1 or 2
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  locations  Location[]
+  overflow   OverflowItem[]
+  movements  Movement[]
+
+  @@index([code])
+  @@index([floor])
+  @@index([colorSuffix])
+  @@map("products")
+}
+
+// Physical Storage Locations (Shelves)
+model Location {
+  id          String         @id @default(cuid())
+  floor       Int            // 1 or 2
+  column      String         // L1, L2, L3, L4, L5, L6
+  boxPosition Int            // 1 or 2 (each column holds up to 2 boxes)
+  productId   String?
+  status      LocationStatus @default(EMPTY)
+  quantity    Int            @default(0) // Number of boxes (0, 1, or 2)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  product   Product?   @relation(fields: [productId], references: [id])
+  movements Movement[]
+
+  @@unique([floor, column, boxPosition])
+  @@index([floor, column])
+  @@index([status])
+  @@map("locations")
+}
+
+enum LocationStatus {
+  EMPTY     // 0 boxes
+  LOW       // 1 box
+  FULL      // 2 boxes
+  IN_PRODUCTION // Marked as "OK" - being produced at Guatupê
+}
+
+// Overflow Storage (Gordura) - Temporary holding area
+model OverflowItem {
+  id                String   @id @default(cuid())
+  productId         String
+  quantity          Int      // Number of boxes
+  dateStored        DateTime @default(now())
+  waitingForFloor   Int?     // Which floor this item is waiting for
+  waitingForColumn  String?  // Which column this item is waiting for
+  notes             String?
+  priority          Int      @default(0) // Auto-calculated based on age
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+  actions OverflowAction[]
+
+  @@index([productId])
+  @@index([dateStored])
+  @@index([priority])
+  @@map("overflow_items")
+}
+
+// Overflow Action History
+model OverflowAction {
+  id             String   @id @default(cuid())
+  overflowItemId String
+  userId         String
+  action         String   // "ADDED", "TRANSFERRED", "REMOVED"
+  fromLocation   String?  // "OVERFLOW"
+  toLocation     String?  // "Floor 1, L2"
+  quantity       Int
+  timestamp      DateTime @default(now())
+
+  overflowItem OverflowItem @relation(fields: [overflowItemId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([overflowItemId])
+  @@index([timestamp])
+  @@map("overflow_actions")
+}
+
+// Movement History (Audit Trail)
+model Movement {
+  id             String       @id @default(cuid())
+  productId      String
+  locationId     String?
+  userId         String
+  movementType   MovementType
+  quantityBefore Int
+  quantityAfter  Int
+  fromLocation   String?      // Human-readable location description
+  toLocation     String?      // Human-readable location description
+  notes          String?
+  timestamp      DateTime     @default(now())
+
+  product  Product   @relation(fields: [productId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id])
+  user     User      @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([userId])
+  @@index([timestamp])
+  @@map("movements")
+}
+
+enum MovementType {
+  RECEIVED          // Received from Guatupê
+  STORED            // Stored in shelf location
+  MOVED             // Moved between locations
+  WITHDRAWN         // Withdrawn for expedition
+  TRANSFERRED       // Transferred from overflow to shelf
+  MARKED_PRODUCTION // Marked as "OK" (in production)
+  RETURNED          // Returned from production
+}
+
+// Production Orders (when items are marked as "OK")
+model ProductionOrder {
+  id               String   @id @default(cuid())
+  productId        String
+  quantityOrdered  Int      // Number of boxes ordered
+  expectedDelivery DateTime?
+  notes            String?
+  status           String   @default("PENDING") // PENDING, IN_PRODUCTION, COMPLETED
+  orderedAt        DateTime @default(now())
+  completedAt      DateTime?
+
+  @@index([productId])
+  @@index([status])
+  @@map("production_orders")
+}
