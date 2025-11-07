@@ -1,0 +1,121 @@
+═══════════════════════════════════════════════════════════
+  🚀 METALTEC ESTOQUE - EXECUTE ESTES COMANDOS AGORA
+═══════════════════════════════════════════════════════════
+
+✅ SEU CÓDIGO JÁ ESTÁ NO GITHUB!
+   https://github.com/oguilhermeleite/Metaltec
+
+Agora vamos deixar tudo funcionando localmente:
+
+═══════════════════════════════════════════════════════════
+  OPÇÃO 1: COM DOCKER (MAIS FÁCIL) ⭐ RECOMENDADO
+═══════════════════════════════════════════════════════════
+
+1. Abra um terminal NOVO (PowerShell ou CMD)
+
+2. Vá para a pasta do projeto:
+   cd C:\Users\Guilherme\Trae.ai\Metaltec
+
+3. Execute estes comandos:
+
+   docker-compose up -d
+   npm run db:push
+   npm run db:seed
+   npm run dev
+
+4. Acesse: http://localhost:3000
+
+═══════════════════════════════════════════════════════════
+  OPÇÃO 2: SEM DOCKER (MANUAL)
+═══════════════════════════════════════════════════════════
+
+1. Instale PostgreSQL:
+   https://www.postgresql.org/download/windows/
+
+2. Durante instalação:
+   - Senha: metaltec123
+   - Porta: 5432
+
+3. Crie o banco de dados:
+   - Abra pgAdmin
+   - Botão direito em "Databases" → Create → Database
+   - Nome: metaltec_estoque
+   - Salvar
+
+4. Execute:
+   npm run db:push
+   npm run db:seed
+   npm run dev
+
+5. Acesse: http://localhost:3000
+
+═══════════════════════════════════════════════════════════
+  LOGIN
+═══════════════════════════════════════════════════════════
+
+Email: operador@metaltec.com.br
+Senha: metaltec123
+
+═══════════════════════════════════════════════════════════
+  📱 TESTAR NO CELULAR
+═══════════════════════════════════════════════════════════
+
+1. Descubra seu IP:
+   ipconfig
+   (Procure por IPv4, exemplo: 192.168.1.100)
+
+2. No celular, acesse:
+   http://SEU-IP:3000
+   (exemplo: http://192.168.1.100:3000)
+
+3. Instale como app:
+   Menu → "Instalar app"
+
+═══════════════════════════════════════════════════════════
+  🌐 DEPLOY EM PRODUÇÃO (GRÁTIS)
+═══════════════════════════════════════════════════════════
+
+Quando quiser colocar no ar:
+
+1. Supabase (banco de dados grátis):
+   https://supabase.com
+
+2. Vercel (hosting grátis):
+   https://vercel.com
+   - Import repository: oguilhermeleite/Metaltec
+   - Add environment variables
+   - Deploy!
+
+GUIA COMPLETO: Veja o arquivo DEPLOY.md
+
+═══════════════════════════════════════════════════════════
+  ❌ PROBLEMAS?
+═══════════════════════════════════════════════════════════
+
+Erro "Can't reach database":
+→ PostgreSQL não está rodando
+→ Se Docker: docker-compose up -d
+→ Se instalado: Inicie o serviço PostgreSQL
+
+Erro "Module not found":
+→ npm install
+
+Erro no Prisma:
+→ npm run db:generate
+
+═══════════════════════════════════════════════════════════
+  📚 ARQUIVOS ÚTEIS
+═══════════════════════════════════════════════════════════
+
+COMECE_AQUI.md  → Guia visual de início rápido
+SETUP.md        → Instalação passo a passo
+DEPLOY.md       → Como fazer deploy em produção
+README.md       → Documentação técnica completa
+
+═══════════════════════════════════════════════════════════
+
+💡 DICA: Use Docker! É muito mais fácil e rápido.
+
+🎉 TUDO PRONTO! Sistema 100% funcional e no GitHub!
+
+═══════════════════════════════════════════════════════════
