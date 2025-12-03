@@ -1,4 +1,4 @@
-// Metaltec Stock Control System Database Schema
+// Metaltec Stock Control System - Database Schema
 
 generator client {
   provider = "prisma-client-js"
@@ -9,166 +9,158 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// User Authentication
+// User model for authentication and tracking
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id        String     @id @default(cuid())
+  email     String     @unique
   name      String
   password  String
-  role      UserRole @default(OPERATOR)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  role      UserRole   @default(OPERATOR)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
   movements Movement[]
-  overflowActions OverflowAction[]
+  productionOrders ProductionOrder[]
 
   @@map("users")
 }
 
 enum UserRole {
-  OPERATOR  // Warehouse operator - full access to receive/store/move
-  MANAGER   // Anderson - dashboard, reports, mark as "OK"
-  EXPEDITION // Karen - view stock, register withdrawals
-  PRODUCTION // Adriano/Bastião - view status only
+  OPERATOR   // Warehouse operators
+  MANAGER    // Anderson - production management
+  EXPEDITION // Karen - expedition team
+  ADMIN      // System admin
 }
 
-// Products Database
+// Product model - represents each SKU (code + color combination)
 model Product {
   id          String   @id @default(cuid())
-  code        String   @unique // e.g., "1122 BR", "1510X CR"
-  name        String   // Full product name
-  color       String   // BR (White), PT (Black), CR (Chrome), MA (Brown), ME (Metallic), BZ (Bronze)
-  colorSuffix String   // Extracted suffix for easier filtering
-  material    String?  // X (Aluminum), XZ (Zamak), XJ, XJZ, G, M
+  code        String   // e.g., "1122", "1510X"
+  name        String   // e.g., "Dobradiça", "Puxador"
+  color       Color    // MA/ME/BZ/BR/PT/CR
+  material    Material @default(ALUMINUM)
   floor       Int      // 1 or 2
+
+  // Location data - JSON structure for flexibility
+  // Format: { "L1": 2, "L2": 0, "L3": 1, "L4": "OK", "L5": 2, "L6": 1 }
+  // Values: 0 (empty), 1 (1 box), 2 (2 boxes/full), "OK" (in production)
+  locations   Json     @default("{}")
+
+  // Metadata
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  locations  Location[]
-  overflow   OverflowItem[]
-  movements  Movement[]
+  // Relations
+  movements   Movement[]
+  overflow    Overflow[]
+  productionOrders ProductionOrder[]
 
+  @@unique([code, color])
   @@index([code])
   @@index([floor])
-  @@index([colorSuffix])
+  @@index([color])
   @@map("products")
 }
 
-// Physical Storage Locations (Shelves)
-model Location {
-  id          String         @id @default(cuid())
-  floor       Int            // 1 or 2
-  column      String         // L1, L2, L3, L4, L5, L6
-  boxPosition Int            // 1 or 2 (each column holds up to 2 boxes)
-  productId   String?
-  status      LocationStatus @default(EMPTY)
-  quantity    Int            @default(0) // Number of boxes (0, 1, or 2)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-
-  product   Product?   @relation(fields: [productId], references: [id])
-  movements Movement[]
-
-  @@unique([floor, column, boxPosition])
-  @@index([floor, column])
-  @@index([status])
-  @@map("locations")
+enum Color {
+  MA // Marrom (Brown)
+  ME // Metal (Silver)
+  BZ // Bronze
+  BR // Branco (White)
+  PT // Preto (Black)
+  CR // Cromado (Chrome)
 }
 
-enum LocationStatus {
-  EMPTY     // 0 boxes
-  LOW       // 1 box
-  FULL      // 2 boxes
-  IN_PRODUCTION // Marked as "OK" - being produced at Guatupê
+enum Material {
+  ALUMINUM
+  ZAMAK
+  STEEL
+  BRASS
 }
 
-// Overflow Storage (Gordura) - Temporary holding area
-model OverflowItem {
-  id                String   @id @default(cuid())
-  productId         String
-  quantity          Int      // Number of boxes
-  dateStored        DateTime @default(now())
-  waitingForFloor   Int?     // Which floor this item is waiting for
-  waitingForColumn  String?  // Which column this item is waiting for
-  notes             String?
-  priority          Int      @default(0) // Auto-calculated based on age
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  product Product @relation(fields: [productId], references: [id])
-  actions OverflowAction[]
-
-  @@index([productId])
-  @@index([dateStored])
-  @@index([priority])
-  @@map("overflow_items")
-}
-
-// Overflow Action History
-model OverflowAction {
-  id             String   @id @default(cuid())
-  overflowItemId String
-  userId         String
-  action         String   // "ADDED", "TRANSFERRED", "REMOVED"
-  fromLocation   String?  // "OVERFLOW"
-  toLocation     String?  // "Floor 1, L2"
-  quantity       Int
-  timestamp      DateTime @default(now())
-
-  overflowItem OverflowItem @relation(fields: [overflowItemId], references: [id])
-  user         User         @relation(fields: [userId], references: [id])
-
-  @@index([overflowItemId])
-  @@index([timestamp])
-  @@map("overflow_actions")
-}
-
-// Movement History (Audit Trail)
+// Movement model - complete audit trail
 model Movement {
-  id             String       @id @default(cuid())
-  productId      String
-  locationId     String?
-  userId         String
-  movementType   MovementType
-  quantityBefore Int
-  quantityAfter  Int
-  fromLocation   String?      // Human-readable location description
-  toLocation     String?      // Human-readable location description
-  notes          String?
-  timestamp      DateTime     @default(now())
+  id          String       @id @default(cuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
 
-  product  Product   @relation(fields: [productId], references: [id])
-  location Location? @relation(fields: [locationId], references: [id])
-  user     User      @relation(fields: [userId], references: [id])
+  type        MovementType
+  from        String?      // e.g., "L2", "OVERFLOW", "PRODUCTION"
+  to          String       // e.g., "L3", "OVERFLOW"
+  quantity    Int          // Number of boxes
+
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+
+  notes       String?
+  timestamp   DateTime     @default(now())
 
   @@index([productId])
-  @@index([userId])
   @@index([timestamp])
+  @@index([userId])
   @@map("movements")
 }
 
 enum MovementType {
-  RECEIVED          // Received from Guatupê
-  STORED            // Stored in shelf location
-  MOVED             // Moved between locations
-  WITHDRAWN         // Withdrawn for expedition
-  TRANSFERRED       // Transferred from overflow to shelf
-  MARKED_PRODUCTION // Marked as "OK" (in production)
-  RETURNED          // Returned from production
+  STORAGE        // Storing in shelf
+  OVERFLOW       // Moving to overflow
+  TRANSFER       // Moving from overflow to shelf
+  PRODUCTION     // Marking as in production
+  EXPEDITION     // Sending out
+  ADJUSTMENT     // Manual adjustment
 }
 
-// Production Orders (when items are marked as "OK")
+// Overflow model - items waiting for shelf space
+model Overflow {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  quantity    Int      // Number of boxes
+  storedDate  DateTime @default(now())
+
+  // Where this item is waiting to go
+  waitingForFloor  Int?
+  waitingForColumn String? // e.g., "L2"
+
+  notes       String?
+  resolved    Boolean  @default(false)
+  resolvedAt  DateTime?
+
+  @@index([productId])
+  @@index([resolved])
+  @@index([storedDate])
+  @@map("overflow_items")
+}
+
+// Production Order model - track items being manufactured
 model ProductionOrder {
-  id               String   @id @default(cuid())
-  productId        String
-  quantityOrdered  Int      // Number of boxes ordered
-  expectedDelivery DateTime?
-  notes            String?
-  status           String   @default("PENDING") // PENDING, IN_PRODUCTION, COMPLETED
-  orderedAt        DateTime @default(now())
-  completedAt      DateTime?
+  id              String   @id @default(cuid())
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  quantityOrdered Int      // Number of boxes ordered
+  quantityReceived Int     @default(0)
+
+  orderedBy       String
+  orderedByUser   User     @relation(fields: [orderedBy], references: [id])
+
+  expectedDate    DateTime?
+  receivedDate    DateTime?
+
+  status          ProductionStatus @default(IN_PRODUCTION)
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([productId])
   @@index([status])
+  @@index([expectedDate])
   @@map("production_orders")
+}
+
+enum ProductionStatus {
+  IN_PRODUCTION  // Currently being made at Guatupê
+  RECEIVED       // Arrived at warehouse
+  CANCELLED      // Order cancelled
 }

@@ -2,83 +2,126 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { calculateNewStatus, checkOverflowSpaceOpened } from '@/lib/location-utils';
 
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
 
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { productId, locationId, quantity, userId } = await request.json();
+    const { productId, column, quantity } = await request.json();
 
-    if (!productId || !locationId || !quantity) {
+    if (!productId || !column || !quantity) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Dados incompletos' },
         { status: 400 }
       );
     }
 
-    // Get the location and product
-    const [location, product] = await Promise.all([
-      prisma.location.findUnique({ where: { id: locationId } }),
-      prisma.product.findUnique({ where: { id: productId } }),
-    ]);
+    // Get product with current locations
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
 
-    if (!location || !product) {
+    if (!product) {
       return NextResponse.json(
-        { error: 'Location or product not found' },
+        { error: 'Produto não encontrado' },
         { status: 404 }
       );
     }
 
-    // Calculate new quantity
-    const newQuantity = location.quantity + quantity;
-    if (newQuantity > 2) {
+    const locations = product.locations as Record<string, any>;
+    const currentStatus = locations[column] ?? 0;
+
+    // Check if location can accept more boxes
+    if (currentStatus === 'OK') {
       return NextResponse.json(
-        { error: 'Cannot store more than 2 boxes per location' },
+        { error: 'Localização marcada como "Em Produção"' },
         { status: 400 }
       );
     }
 
-    // Determine new status
-    let newStatus: 'EMPTY' | 'LOW' | 'FULL' = 'EMPTY';
-    if (newQuantity === 1) newStatus = 'LOW';
-    else if (newQuantity === 2) newStatus = 'FULL';
+    if (typeof currentStatus === 'number' && currentStatus + quantity > 2) {
+      return NextResponse.json(
+        { error: 'Esta localização não tem espaço suficiente' },
+        { status: 400 }
+      );
+    }
 
-    // Update location
-    const updatedLocation = await prisma.location.update({
-      where: { id: locationId },
-      data: {
-        productId: product.id,
-        quantity: newQuantity,
-        status: newStatus,
-      },
+    // Calculate new status
+    const newStatus = calculateNewStatus(currentStatus, quantity);
+
+    // Update product locations
+    const updatedLocations = {
+      ...locations,
+      [column]: newStatus,
+    };
+
+    await prisma.product.update({
+      where: { id: productId },
+      data: { locations: updatedLocations },
+    });
+
+    // Get user ID
+    const user = await prisma.user.findUnique({
+      where: { email: session.user?.email || '' },
     });
 
     // Create movement record
     await prisma.movement.create({
       data: {
         productId: product.id,
-        locationId: location.id,
-        userId: userId || session.user?.email || 'unknown',
-        movementType: 'STORED',
-        quantityBefore: location.quantity,
-        quantityAfter: newQuantity,
-        toLocation: `Andar ${location.floor}, ${location.column}`,
-        notes: `Armazenado ${quantity} caixa(s)`,
+        type: 'STORAGE',
+        from: 'RECEBIMENTO',
+        to: column,
+        quantity: quantity,
+        userId: user?.id || '',
+        notes: `Armazenado ${quantity} caixa(s) em ${column}`,
       },
     });
 
+    // Check if space opened up for overflow items
+    const spaceOpened = checkOverflowSpaceOpened(
+      product.floor,
+      column,
+      currentStatus,
+      newStatus
+    );
+
+    if (spaceOpened) {
+      // Find overflow items waiting for this location
+      const waitingItems = await prisma.overflow.findMany({
+        where: {
+          productId: product.id,
+          waitingForColumn: column,
+          resolved: false,
+        },
+        include: {
+          product: true,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        product: { ...product, locations: updatedLocations },
+        overflowAlert: waitingItems.length > 0 ? {
+          message: `${waitingItems.length} item(ns) na gordura aguardando por ${column}`,
+          items: waitingItems,
+        } : null,
+      });
+    }
+
     return NextResponse.json({
       success: true,
-      location: updatedLocation,
+      product: { ...product, locations: updatedLocations },
     });
   } catch (error) {
     console.error('Storage error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Erro ao armazenar produto' },
       { status: 500 }
     );
   }

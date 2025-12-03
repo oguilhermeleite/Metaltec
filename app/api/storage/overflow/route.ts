@@ -6,18 +6,14 @@ import { prisma } from '@/lib/prisma';
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { productId, quantity, waitingForFloor, userId } = await request.json();
+    const { productId, quantity, waitingForColumn } = await request.json();
 
     if (!productId || !quantity) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Dados incompletos' }, { status: 400 });
     }
 
     const product = await prisma.product.findUnique({
@@ -25,36 +21,22 @@ export async function POST(request: Request) {
     });
 
     if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Produto não encontrado' }, { status: 404 });
     }
 
-    // Calculate priority (higher for older items)
-    const daysWaiting = 0; // New item
-    const priority = 10 - daysWaiting; // Will be updated by cron job
+    const user = await prisma.user.findUnique({
+      where: { email: session.user?.email || '' },
+    });
 
     // Create overflow item
-    const overflowItem = await prisma.overflowItem.create({
+    const overflowItem = await prisma.overflow.create({
       data: {
         productId: product.id,
         quantity,
-        waitingForFloor: waitingForFloor || product.floor,
-        priority,
-        notes: 'Aguardando espaço na prateleira',
-      },
-    });
-
-    // Create overflow action record
-    await prisma.overflowAction.create({
-      data: {
-        overflowItemId: overflowItem.id,
-        userId: userId || session.user?.email || 'unknown',
-        action: 'ADDED',
-        fromLocation: 'Recebimento',
-        toLocation: 'OVERFLOW',
-        quantity,
+        waitingForFloor: product.floor,
+        waitingForColumn: waitingForColumn || null,
+        notes: 'Aguardando espaço em prateleira',
+        resolved: false,
       },
     });
 
@@ -62,12 +44,12 @@ export async function POST(request: Request) {
     await prisma.movement.create({
       data: {
         productId: product.id,
-        userId: userId || session.user?.email || 'unknown',
-        movementType: 'RECEIVED',
-        quantityBefore: 0,
-        quantityAfter: quantity,
-        toLocation: 'Gordura (Overflow)',
-        notes: `Armazenado ${quantity} caixa(s) na gordura`,
+        type: 'OVERFLOW',
+        from: 'RECEBIMENTO',
+        to: 'GORDURA',
+        quantity,
+        userId: user?.id || '',
+        notes: `${quantity} caixa(s) enviada(s) para gordura - sem espaço`,
       },
     });
 
@@ -76,10 +58,37 @@ export async function POST(request: Request) {
       overflowItem,
     });
   } catch (error) {
-    console.error('Overflow storage error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Overflow error:', error);
+    return NextResponse.json({ error: 'Erro ao armazenar na gordura' }, { status: 500 });
+  }
+}
+
+// GET - List overflow items
+export async function GET(request: Request) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const resolved = searchParams.get('resolved') === 'true';
+
+    const overflowItems = await prisma.overflow.findMany({
+      where: { resolved },
+      include: {
+        product: true,
+      },
+      orderBy: { storedDate: 'asc' }, // Oldest first
+    });
+
+    return NextResponse.json({
+      success: true,
+      items: overflowItems,
+      count: overflowItems.length,
+    });
+  } catch (error) {
+    console.error('Overflow list error:', error);
+    return NextResponse.json({ error: 'Erro ao listar gordura' }, { status: 500 });
   }
 }
