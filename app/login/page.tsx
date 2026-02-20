@@ -1,41 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Package } from 'lucide-react';
+import { Package, AlertTriangle } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError('Email ou senha inválidos');
-      } else {
-        router.push('/');
-        router.refresh();
-      }
-    } catch (err) {
-      setError('Erro ao fazer login. Tente novamente.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-metaltec-blue to-blue-900 px-4">
@@ -49,64 +18,46 @@ export default function LoginPage() {
           <p className="text-sm text-gray-600 mt-2">Sistema de Controle de Estoque</p>
         </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-metaltec-blue focus:border-transparent outline-none transition"
-              placeholder="seu@email.com.br"
-              autoComplete="email"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Senha
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-metaltec-blue focus:border-transparent outline-none transition"
-              placeholder="••••••••"
-              autoComplete="current-password"
-            />
-          </div>
-
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
+        {/* Static Mode Warning */}
+        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6 mb-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-6 h-6 text-yellow-600 flex-shrink-0" />
+            <div>
+              <h2 className="text-sm font-semibold text-yellow-900 mb-2">Autenticação Desabilitada</h2>
+              <p className="text-xs text-yellow-800">
+                O login está desabilitado porque este site está rodando em modo estático no GitHub Pages.
+                Não há servidor backend ou banco de dados disponível.
+              </p>
             </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-metaltec-blue text-white py-3 rounded-lg font-medium hover:bg-blue-900 transition disabled:opacity-50 disabled:cursor-not-allowed touch-target"
-          >
-            {loading ? 'Entrando...' : 'Entrar'}
-          </button>
-        </form>
-
-        {/* Demo Credentials */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-          <p className="text-xs text-gray-600 font-medium mb-2">Credenciais de demonstração:</p>
-          <div className="text-xs text-gray-500 space-y-1">
-            <p>• Operador: operador@metaltec.com.br</p>
-            <p>• Gerente: anderson@metaltec.com.br</p>
-            <p>• Expedição: karen@metaltec.com.br</p>
-            <p className="mt-2 text-gray-400">Senha: metaltec123</p>
           </div>
+        </div>
+
+        {/* Info */}
+        <div className="bg-gray-50 rounded-lg p-6">
+          <p className="text-sm text-gray-700 mb-4">
+            Este é um site estático de demonstração. Para usar o sistema completo com autenticação e banco de dados,
+            você precisa:
+          </p>
+          <ul className="text-sm text-gray-700 space-y-2">
+            <li>• Servidor Node.js</li>
+            <li>• Banco de dados PostgreSQL</li>
+            <li>• Variáveis de ambiente configuradas</li>
+          </ul>
+        </div>
+
+        {/* Navigation */}
+        <button
+          onClick={() => router.push('/')}
+          className="w-full mt-6 bg-metaltec-blue text-white py-3 rounded-lg font-medium hover:bg-blue-900 transition"
+        >
+          Voltar para Página Inicial
+        </button>
+
+        {/* Footer */}
+        <div className="mt-6 text-center">
+          <p className="text-xs text-gray-500">
+            Consulte o README.md para instruções de instalação completa
+          </p>
         </div>
       </div>
     </div>

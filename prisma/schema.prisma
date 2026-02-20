@@ -40,18 +40,14 @@ model Product {
   material    Material @default(ALUMINUM)
   floor       Int      // 1 or 2
 
-  // Location data - JSON structure for flexibility
-  // Format: { "L1": 2, "L2": 0, "L3": 1, "L4": "OK", "L5": 2, "L6": 1 }
-  // Values: 0 (empty), 1 (1 box), 2 (2 boxes/full), "OK" (in production)
-  locations   Json     @default("{}")
-
   // Metadata
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
+  locations   Location[]
   movements   Movement[]
-  overflow    Overflow[]
+  overflowItems OverflowItem[]
   productionOrders ProductionOrder[]
 
   @@unique([code, color])
@@ -75,6 +71,35 @@ enum Material {
   ZAMAK
   STEEL
   BRASS
+}
+
+// Location model - individual storage positions
+model Location {
+  id          String         @id @default(cuid())
+  productId   String?
+  product     Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  floor       Int            // 1 or 2
+  column      String         // L1, L2, L3, L4, L5, L6
+  boxPosition Int            // 1 or 2 (top/bottom)
+
+  status      LocationStatus @default(EMPTY)
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([floor, column, boxPosition])
+  @@index([productId])
+  @@index([floor, column])
+  @@index([status])
+  @@map("locations")
+}
+
+enum LocationStatus {
+  EMPTY          // No product stored
+  FULL           // Has boxes stored
+  LOW            // Less than optimal stock
+  IN_PRODUCTION  // Product marked as "OK" (being manufactured)
 }
 
 // Movement model - complete audit trail
@@ -109,14 +134,14 @@ enum MovementType {
   ADJUSTMENT     // Manual adjustment
 }
 
-// Overflow model - items waiting for shelf space
-model Overflow {
+// OverflowItem model - items waiting for shelf space
+model OverflowItem {
   id          String   @id @default(cuid())
   productId   String
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   quantity    Int      // Number of boxes
-  storedDate  DateTime @default(now())
+  dateStored  DateTime @default(now())
 
   // Where this item is waiting to go
   waitingForFloor  Int?
@@ -126,9 +151,12 @@ model Overflow {
   resolved    Boolean  @default(false)
   resolvedAt  DateTime?
 
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   @@index([productId])
   @@index([resolved])
-  @@index([storedDate])
+  @@index([dateStored])
   @@map("overflow_items")
 }
 

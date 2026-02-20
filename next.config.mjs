@@ -1,13 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'export',
   images: {
-    domains: ['metaltecferragens.com.br'],
+    unoptimized: true, // Required for static export
   },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '2mb',
-    },
-  },
+  // Removed experimental server actions - not supported in static export
 };
 
 export default nextConfig;
